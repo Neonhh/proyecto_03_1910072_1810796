@@ -50,9 +50,9 @@ class App {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
-  private geometry: any;
-  private material: THREE.ShaderMaterial;
-  private mesh: THREE.Mesh;
+  //private geometry: any;
+  //private material: THREE.ShaderMaterial;
+  //private mesh: THREE.Mesh;
   private startTime: number;
 
   // Post-processing
@@ -91,17 +91,17 @@ class App {
 
     const resolution = new THREE.Vector2(window.innerWidth, window.innerHeight);
 
-    this.geometry = new THREE.BoxGeometry(1, 1, 1, 32, 32, 32);
+    //this.geometry = new THREE.BoxGeometry(1, 1, 1, 32, 32, 32);
 
-    const count = this.geometry.attributes.position.count;
-    let randoms = new Float32Array(count);
-    randoms = randoms.map(() => Math.random());
-    const randomAttributes = new THREE.BufferAttribute(randoms, 1);
-    this.geometry.setAttribute('a_random', randomAttributes);
+    //const count = this.geometry.attributes.position.count;
+    //let randoms = new Float32Array(count);
+    //randoms = randoms.map(() => Math.random());
+    //const randomAttributes = new THREE.BufferAttribute(randoms, 1);
+    //this.geometry.setAttribute('a_random', randomAttributes);
 
-    const textureLoader = new THREE.TextureLoader();
-    const boxTexture = textureLoader.load('static/img/box.jpeg');
-
+    //const textureLoader = new THREE.TextureLoader();
+    //const boxTexture = textureLoader.load('static/img/box.jpeg');
+/*
     this.material = new THREE.RawShaderMaterial({
       vertexShader,
       fragmentShader,
@@ -117,19 +117,37 @@ class App {
       },
       glslVersion: THREE.GLSL3,
     });
+*/
+    // Add ambient light for general illumination
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Soft white light
+    this.scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(0, 0, 1);
+    // Add directional light for focused illumination
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 3); // Bright white light
+    directionalLight.position.set(1, 1, 1).normalize(); // Position the light at an angle
     this.scene.add(directionalLight);
 
     // Create mesh
-    this.mesh = new THREE.Mesh(this.geometry, this.material);
-    this.scene.add(this.mesh);
-    this.camera.position.z = 1.5;
+    //this.mesh = new THREE.Mesh(this.geometry, this.material);
+    //this.scene.add(this.mesh);
+    this.camera.position.z = 3.0;
 
-    const sphere = this.createNewSphere(0.5, new THREE.Vector3(1, 0, 0));
-    this.scene.add(sphere);
+    // Add some spheres
+    const yellowSphere = this.createNewSphere(0.5, new THREE.Vector3(1.5, 0.5, 0), { color: 0xffff00 }); // Fluorescent yellow
+    this.scene.add(yellowSphere);
 
+    const greenSphere = this.createNewSphere(0.5, new THREE.Vector3(-1.5, -0.8, 0.5), { color: 0x00ff00 }); // Fluorescent green
+    this.scene.add(greenSphere);
+
+    const cyanSphere = this.createNewSphere(0.5, new THREE.Vector3(-0.3, 1.5, 0.3), { color: 0x00ffff }); // Fluorescent cyan
+    this.scene.add(cyanSphere);
+
+    const fuchsiaSphere = this.createNewSphere(0.5, new THREE.Vector3(0.8, -1.5, -0.5), { color: 0xff00ff }); // Fluorescent fuchsia
+    this.scene.add(fuchsiaSphere);
+
+    const graySphere = this.createNewSphere(0.5, new THREE.Vector3(0, 0, 0), { color: 0x808080 }); // Gray
+    this.scene.add(graySphere);
+        
     const controls = new OrbitControls(this.camera, canvas);
     controls.enableDamping = true;
 
@@ -151,9 +169,9 @@ class App {
     this.animate();
   }
 
-  private createNewSphere(radius: number, position: THREE.Vector3): THREE.Mesh {
+  private createNewSphere(radius: number, position: THREE.Vector3, color: THREE.MeshPhongMaterialParameters) {
     const geometry = new THREE.SphereGeometry(radius, 32, 32);
-    const material = new THREE.MeshPhongMaterial({ color: 0xffff00 });
+    const material = new THREE.MeshPhongMaterial(color);
     // const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
     const sphere = new THREE.Mesh(geometry, material);
     sphere.position.copy(position);
@@ -238,7 +256,7 @@ class App {
   private animate(): void {
     requestAnimationFrame(this.animate);
     const elapsedTime = (Date.now() - this.startTime) / 1000;
-    this.material.uniforms.uTime.value = elapsedTime;
+    //this.material.uniforms.uTime.value = elapsedTime;
 
     // Forget about the renderer, we will use the composer instead
     // this.renderer.render(this.scene, this.camera);
@@ -249,7 +267,7 @@ class App {
   private onWindowResize(): void {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
-    this.material.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+    //this.material.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
 
     // Update the renderer when resizing, this is necessary
     this.renderer.setSize(window.innerWidth, window.innerHeight);
