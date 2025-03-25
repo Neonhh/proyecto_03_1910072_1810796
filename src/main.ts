@@ -8,14 +8,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
-// plain vertex shader
-//import vertexShader from './shaders/vertex.glsl';
-// plain fragment shader that shows the loaded texture
-//import fragmentShader from './shaders/texture.glsl';
-
 // Post-processing shaders
 import ppVertexShader from './shaders/post_processing/vertex.glsl';
-//import ppFragmentGrayScale from './shaders/post_processing/frag_grayscale.glsl';
 import ppFragmentUVBloom from './shaders/post_processing/frag_uvbloom.glsl';
 import ppFragmentBlur from './shaders/post_processing/blur.glsl';
 
@@ -39,20 +33,25 @@ interface Effect {
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map
 // https://stackoverflow.com/questions/56398223/differences-between-and-when-to-use-map-vs-record
 
-const defaultUniforms = {
+// Define shaders for post-processing
+// And uniforms to be visible to the GUI
+const bloomUniforms = {
   uBrightnessThreshold: 0.5, 
 };
-
 const bloomShader: ShaderDefinition = {
   uniforms: {
     tDiffuse: { value: null },
     uIntensity: { value: 1.0 },
-    uBrightnessThreshold: { value: defaultUniforms.uBrightnessThreshold }, // Corrected spelling
+    uBrightnessThreshold: { value: bloomUniforms.uBrightnessThreshold }, // Corrected spelling
   },
   vertexShader: ppVertexShader,
   fragmentShader: ppFragmentUVBloom,
 };
 
+const blurUniforms = {
+  uBlurAmount: 1.0,
+  uDirection: new THREE.Vector2(1.0, 0.0),
+};
 const blurShader: ShaderDefinition = {
   uniforms: {
     tDiffuse: { value: null },
@@ -106,19 +105,20 @@ class App {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     const canvas = document.body.appendChild(this.renderer.domElement);
 
+  //Keep in case we want to load texture
+  /*
     const resolution = new THREE.Vector2(window.innerWidth, window.innerHeight);
 
-    //this.geometry = new THREE.BoxGeometry(1, 1, 1, 32, 32, 32);
+    this.geometry = new THREE.BoxGeometry(1, 1, 1, 32, 32, 32);
 
-    //const count = this.geometry.attributes.position.count;
-    //let randoms = new Float32Array(count);
-    //randoms = randoms.map(() => Math.random());
-    //const randomAttributes = new THREE.BufferAttribute(randoms, 1);
-    //this.geometry.setAttribute('a_random', randomAttributes);
+    const count = this.geometry.attributes.position.count;
+    let randoms = new Float32Array(count);
+    randoms = randoms.map(() => Math.random());
+    const randomAttributes = new THREE.BufferAttribute(randoms, 1);
+    this.geometry.setAttribute('a_random', randomAttributes);
 
-    //const textureLoader = new THREE.TextureLoader();
-    //const boxTexture = textureLoader.load('static/img/box.jpeg');
-/*
+    const textureLoader = new THREE.TextureLoader();
+    const boxTexture = textureLoader.load('static/img/box.jpeg');
     this.material = new THREE.RawShaderMaterial({
       vertexShader,
       fragmentShader,
@@ -135,11 +135,10 @@ class App {
       glslVersion: THREE.GLSL3,
     });
 */
-    // Add ambient light for general illumination
+    // Add lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Soft white light
     this.scene.add(ambientLight);
 
-    // Add directional light for focused illumination
     const directionalLight = new THREE.DirectionalLight(0xffffff, 3); // Bright white light
     directionalLight.position.set(1, 1, 1).normalize(); // Position the light at an angle
     this.scene.add(directionalLight);
@@ -170,41 +169,39 @@ class App {
 
     //GUI Controls
     const gui = new GUI();
-    const uniforms = defaultUniforms;
     const folder = gui.addFolder("General Settings");
     folder
-      .add(uniforms, "uBrightnessThreshold", 0.0, 1.0)
+      .add(bloomUniforms, "uBrightnessThreshold", 0.0, 1.0)
       .name("Brightness Threshold")
       .onChange((value: GLfloat) => {
         this.updateEffectParam("bloom", "uBrightnessThreshold", value);
       });
-      folder
-      .add(blurShader.uniforms.uBlurAmount, 'value', 0.0, 5.0)
-      .name('Blur Amount')
+    folder
+      .add(blurUniforms, "uBlurAmount", 0.0, 10.0)
+      .name("Blur Amount")
       .onChange((value: number) => {
-        this.updateEffectParam('blurX', 'uBlurAmount', value);
-        this.updateEffectParam('blurY', 'uBlurAmount', value);
+        this.updateEffectParam("blurH", "uBlurAmount", value);
+        this.updateEffectParam("blurV", "uBlurAmount", value);
       });
-      folder
-  .add({ blurH: true }, 'blurH')
-  .name('Enable Horizontal Blur')
-  .onChange((enabled: boolean) => {
-    this.toggleEffect('blurH', enabled);
-  });
+    folder
+      .add({ blurH: true }, 'blurH')
+      .name('Enable Horizontal Blur')
+      .onChange((enabled: boolean) => {
+        this.toggleEffect('blurH', enabled);
+      });
+    folder
+      .add({ blurV: true }, 'blurV')
+      .name('Enable Vertical Blur')
+      .onChange((enabled: boolean) => {
+        this.toggleEffect('blurV', enabled);
+      });
 
-folder
-  .add({ blurV: true }, 'blurV')
-  .name('Enable Vertical Blur')
-  .onChange((enabled: boolean) => {
-    this.toggleEffect('blurV', enabled);
-  });
-
-folder
-  .add({ bloom: true }, 'bloom')
-  .name('Enable Bloom')
-  .onChange((enabled: boolean) => {
-    this.toggleEffect('bloom', enabled);
-  });
+    folder
+      .add({ bloom: true }, 'bloom')
+      .name('Enable Bloom')
+      .onChange((enabled: boolean) => {
+        this.toggleEffect('bloom', enabled);
+      });
 
     // Initialize post-processing
     this.setupPostProcessing();
@@ -227,8 +224,8 @@ folder
   private createNewSphere(radius: number, position: THREE.Vector3, color: THREE.MeshPhongMaterialParameters) {
     const geometry = new THREE.SphereGeometry(radius, 32, 32);
     const material = new THREE.MeshPhongMaterial(color);
-    // const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
     const sphere = new THREE.Mesh(geometry, material);
+    
     sphere.position.copy(position);
     return sphere;
   }
@@ -248,6 +245,8 @@ folder
 
     // Add bloom effect
     this.addEffect('bloom', bloomShader);
+    
+    // Add two-pass Gaussian blur
     this.addEffect('blurH', blurShader, {uDirection: new THREE.Vector2(1.0, 0.0)}); //Horizontal
     this.addEffect('blurV', blurShader, {uDirection: new THREE.Vector2(0.0,1.0)}); //Vertical
   }

@@ -14,7 +14,7 @@ layout (location = 1) out vec4 brightColor;
 void main() {
   vec4 color = texture(tDiffuse, vUv);
   
-  // Extract brightness using a threshold
+  // Extract brightness using a threshold from the grayscale color
   float brightness = dot(color.rgb, vec3(0.2126, 0.7512, 0.0722)); // Luminance formula
   vec4 bright;
   if (brightness > uBrightnessThreshold){
@@ -24,6 +24,6 @@ void main() {
     bright = vec4(0.0);
   }
 
-  fragColor = bright; // Output the original color
+  fragColor = bright; // Setting as 'bright' for debugging. Should be 'color'.
   brightColor = bright;    // Output the bright areas for bloom
 }
