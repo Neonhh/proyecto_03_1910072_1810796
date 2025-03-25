@@ -24,6 +24,6 @@ void main() {
     bright = vec4(0.0);
   }
 
-  fragColor = color; // Output the original color
+  fragColor = bright; // Output the original color
   brightColor = bright;    // Output the bright areas for bloom
 }

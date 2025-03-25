@@ -17,6 +17,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import ppVertexShader from './shaders/post_processing/vertex.glsl';
 //import ppFragmentGrayScale from './shaders/post_processing/frag_grayscale.glsl';
 import ppFragmentUVBloom from './shaders/post_processing/frag_uvbloom.glsl';
+import ppFragmentBlur from './shaders/post_processing/blur.glsl';
 
 // Define shader definition interface
 interface ShaderDefinition {
@@ -50,6 +51,16 @@ const bloomShader: ShaderDefinition = {
   },
   vertexShader: ppVertexShader,
   fragmentShader: ppFragmentUVBloom,
+};
+
+const blurShader: ShaderDefinition = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uDirection: {value: new THREE.Vector2(1.0, 0.0)},
+    uBlurAmount: {value: 1.0},
+  },
+  vertexShader: ppVertexShader,
+  fragmentShader: ppFragmentBlur,
 };
 
 class App {
@@ -167,6 +178,33 @@ class App {
       .onChange((value: GLfloat) => {
         this.updateEffectParam("bloom", "uBrightnessThreshold", value);
       });
+      folder
+      .add(blurShader.uniforms.uBlurAmount, 'value', 0.0, 5.0)
+      .name('Blur Amount')
+      .onChange((value: number) => {
+        this.updateEffectParam('blurX', 'uBlurAmount', value);
+        this.updateEffectParam('blurY', 'uBlurAmount', value);
+      });
+      folder
+  .add({ blurH: true }, 'blurH')
+  .name('Enable Horizontal Blur')
+  .onChange((enabled: boolean) => {
+    this.toggleEffect('blurH', enabled);
+  });
+
+folder
+  .add({ blurV: true }, 'blurV')
+  .name('Enable Vertical Blur')
+  .onChange((enabled: boolean) => {
+    this.toggleEffect('blurV', enabled);
+  });
+
+folder
+  .add({ bloom: true }, 'bloom')
+  .name('Enable Bloom')
+  .onChange((enabled: boolean) => {
+    this.toggleEffect('bloom', enabled);
+  });
 
     // Initialize post-processing
     this.setupPostProcessing();
@@ -210,6 +248,8 @@ class App {
 
     // Add bloom effect
     this.addEffect('bloom', bloomShader);
+    this.addEffect('blurH', blurShader, {uDirection: new THREE.Vector2(1.0, 0.0)}); //Horizontal
+    this.addEffect('blurV', blurShader, {uDirection: new THREE.Vector2(0.0,1.0)}); //Vertical
   }
 
   private createGLSL3ShaderPass(shaderDefinition: ShaderDefinition): ShaderPass {
