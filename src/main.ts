@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/Addons.js';
+import GUI from "lil-gui";
 // Post-processing imports
 // You can read more about the post-processing effects here:
 // https://threejs.org/docs/#examples/en/postprocessing/EffectComposer
@@ -8,13 +9,14 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
 // plain vertex shader
-import vertexShader from './shaders/vertex.glsl';
+//import vertexShader from './shaders/vertex.glsl';
 // plain fragment shader that shows the loaded texture
-import fragmentShader from './shaders/texture.glsl';
+//import fragmentShader from './shaders/texture.glsl';
 
 // Post-processing shaders
-import ppVertexShader from './shaders/pp_vertex.glsl';
-import ppFragmentGrayScale from './shaders/pp_frag_grayscale.glsl';
+import ppVertexShader from './shaders/post_processing/vertex.glsl';
+//import ppFragmentGrayScale from './shaders/post_processing/frag_grayscale.glsl';
+import ppFragmentUVBloom from './shaders/post_processing/frag_uvbloom.glsl';
 
 // Define shader definition interface
 interface ShaderDefinition {
@@ -36,14 +38,18 @@ interface Effect {
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map
 // https://stackoverflow.com/questions/56398223/differences-between-and-when-to-use-map-vs-record
 
-const grayscaleShader: ShaderDefinition = {
+const defaultUniforms = {
+  uBrightnessThreshold: 0.5, 
+};
+
+const bloomShader: ShaderDefinition = {
   uniforms: {
-    // tDiffuse is the expected name for the texture that will be passed to the shader
     tDiffuse: { value: null },
     uIntensity: { value: 1.0 },
+    uBrightnessThreshold: { value: defaultUniforms.uBrightnessThreshold }, // Corrected spelling
   },
   vertexShader: ppVertexShader,
-  fragmentShader: ppFragmentGrayScale,
+  fragmentShader: ppFragmentUVBloom,
 };
 
 class App {
@@ -151,6 +157,17 @@ class App {
     const controls = new OrbitControls(this.camera, canvas);
     controls.enableDamping = true;
 
+    //GUI Controls
+    const gui = new GUI();
+    const uniforms = defaultUniforms;
+    const folder = gui.addFolder("General Settings");
+    folder
+      .add(uniforms, "uBrightnessThreshold", 0.0, 1.0)
+      .name("Brightness Threshold")
+      .onChange((value: GLfloat) => {
+        this.updateEffectParam("bloom", "uBrightnessThreshold", value);
+      });
+
     // Initialize post-processing
     this.setupPostProcessing();
 
@@ -182,6 +199,7 @@ class App {
   private setupPostProcessing(): void {
     // Initialize the effect composer
     this.composer = new EffectComposer(this.renderer);
+    this.renderer.setClearColor(0x000000, 1.0); // Transparent background
 
     // Add the render pass
     const renderPass = new RenderPass(this.scene, this.camera);
@@ -190,8 +208,8 @@ class App {
     // Initialize effects collection
     this.effects = new Map<string, Effect>();
 
-    // Add grayscale effect
-    this.addEffect('grayscale', grayscaleShader);
+    // Add bloom effect
+    this.addEffect('bloom', bloomShader);
   }
 
   private createGLSL3ShaderPass(shaderDefinition: ShaderDefinition): ShaderPass {
