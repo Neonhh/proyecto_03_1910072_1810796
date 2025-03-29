@@ -187,7 +187,7 @@ class App {
       });
     folder
       .add(blurUniforms, "uIntensity", 0.0, 5.0)
-      .name("Light Intensity")
+      .name("Bloom Brightness")
       .onChange((value: number) => {
         this.updateEffectParam("blurH", "uIntensity", value);
         this.updateEffectParam("blurV", "uIntensity", value);
