@@ -48,8 +48,9 @@ void main() {
       vec2 offset = vec2(float(x), float(y)) * tex_offset * uBlurAmount; // Calculate 2D offset
       
       vec4 sampleFrag = texture(tDiffuse, vUv + offset); // Sample texture
-      
-      blurredColor += texture(tDiffuse, vUv + offset) * weight;
+
+      float smoothness = 0.5;
+      blurredColor += texture(tDiffuse, vUv + offset) * smoothstep(uBrightnessThreshold - smoothness, uBrightnessThreshold + smoothness, brightness) * weight; // Apply weight and accumulate
       totalWeight += weight; // Accumulate total weight
     }
   }
