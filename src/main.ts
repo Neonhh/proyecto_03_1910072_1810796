@@ -12,6 +12,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import ppVertexShader from './shaders/post_processing/vertex.glsl';
 import ppFragmentUVBloom from './shaders/post_processing/frag_uvbloom.glsl';
 import ppFragmentBlur from './shaders/post_processing/blur.glsl';
+import { blur } from 'three/tsl';
 
 // Define shader definition interface
 interface ShaderDefinition {
@@ -38,20 +39,23 @@ interface Effect {
 const bloomUniforms = {
   uBrightnessThreshold: 0.5, 
 };
+const blurUniforms = {
+  uBlurAmount: 1.0,
+  uDirection: new THREE.Vector2(1.0, 0.0),
+};
 const bloomShader: ShaderDefinition = {
   uniforms: {
     tDiffuse: { value: null },
     uIntensity: { value: 1.0 },
     uBrightnessThreshold: { value: bloomUniforms.uBrightnessThreshold }, // Corrected spelling
+    uBlurAmount: { value: blurUniforms.uBlurAmount },
+    uDirection: { value: blurUniforms.uDirection },
+    uResolution: {value: new THREE.Vector2(window.innerWidth, window.innerHeight)},
   },
   vertexShader: ppVertexShader,
   fragmentShader: ppFragmentUVBloom,
 };
 
-const blurUniforms = {
-  uBlurAmount: 1.0,
-  uDirection: new THREE.Vector2(1.0, 0.0),
-};
 const blurShader: ShaderDefinition = {
   uniforms: {
     tDiffuse: { value: null },
@@ -182,6 +186,7 @@ class App {
       .onChange((value: number) => {
         this.updateEffectParam("blurH", "uBlurAmount", value);
         this.updateEffectParam("blurV", "uBlurAmount", value);
+        this.updateEffectParam("bloom", "uBlurAmount", value);
       });
     folder
       .add({ blurH: true }, 'blurH')
@@ -247,8 +252,8 @@ class App {
     this.addEffect('bloom', bloomShader);
     
     // Add two-pass Gaussian blur
-    this.addEffect('blurH', blurShader, {uDirection: new THREE.Vector2(1.0, 0.0)}); //Horizontal
-    this.addEffect('blurV', blurShader, {uDirection: new THREE.Vector2(0.0,1.0)}); //Vertical
+    //this.addEffect('blurH', blurShader, {uDirection: new THREE.Vector2(1.0, 0.0)}); //Horizontal
+    //this.addEffect('blurV', blurShader, {uDirection: new THREE.Vector2(0.0,1.0)}); //Vertical
   }
 
   private createGLSL3ShaderPass(shaderDefinition: ShaderDefinition): ShaderPass {
@@ -325,7 +330,7 @@ class App {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     //this.material.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
-
+    this.updateEffectParam("bloom", "uResolution", new THREE.Vector2(window.innerWidth, window.innerHeight));
     // Update the renderer when resizing, this is necessary
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     // Update the composer when resizing
