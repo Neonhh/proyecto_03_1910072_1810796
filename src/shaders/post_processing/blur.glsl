@@ -30,5 +30,9 @@ void main() {
     total += weights[i] * 2.0;
   }
 
-  fragColor = color / total; // Normalize the color
+  fragColor = color; // Set the color
+  // Normalize the color only if its the second pass
+  if (uDirection.x == 0.0) {
+    fragColor /= total;
+  }
 }
