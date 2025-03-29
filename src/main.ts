@@ -49,14 +49,16 @@ const bloomShader: ShaderDefinition = {
 };
 
 const blurUniforms = {
-  uBlurAmount: 1.0,
+  uBlurAmount: 5.0,
+  uIntensity: 0.5,
   uDirection: new THREE.Vector2(1.0, 0.0),
 };
 const blurShader: ShaderDefinition = {
   uniforms: {
     tDiffuse: { value: null },
     uDirection: {value: new THREE.Vector2(1.0, 0.0)},
-    uBlurAmount: {value: 1.0},
+    uBlurAmount: {value: blurUniforms.uBlurAmount},
+    uIntensity: {value: blurUniforms.uIntensity},
   },
   vertexShader: ppVertexShader,
   fragmentShader: ppFragmentBlur,
@@ -182,6 +184,13 @@ class App {
       .onChange((value: number) => {
         this.updateEffectParam("blurH", "uBlurAmount", value);
         this.updateEffectParam("blurV", "uBlurAmount", value);
+      });
+    folder
+      .add(blurUniforms, "uIntensity", 0.0, 5.0)
+      .name("Light Intensity")
+      .onChange((value: number) => {
+        this.updateEffectParam("blurH", "uIntensity", value);
+        this.updateEffectParam("blurV", "uIntensity", value);
       });
     folder
       .add({ blurH: true }, 'blurH')
