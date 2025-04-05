@@ -1,17 +1,18 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/Addons.js';
+import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/Addons.js";
+import { OrbitControls } from "three/examples/jsm/Addons.js";
 import GUI from "lil-gui";
+
 // Post-processing imports
-// You can read more about the post-processing effects here:
-// https://threejs.org/docs/#examples/en/postprocessing/EffectComposer
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 
 // Post-processing shaders
-import ppVertexShader from './shaders/post_processing/vertex.glsl';
-import ppFragmentUVBloom from './shaders/post_processing/frag_uvbloom.glsl';
-import ppFragmentBlur from './shaders/post_processing/blur.glsl';
+import ppVertexShader from "./shaders/post_processing/vertex.glsl";
+import ppFragmentUVBloom from "./shaders/post_processing/frag_uvbloom.glsl";
+import ppFragmentBlur from "./shaders/post_processing/blur.glsl";
+// import ppCombine from "./shaders/post_processing/combine.glsl";
 
 // Define shader definition interface
 interface ShaderDefinition {
@@ -28,15 +29,10 @@ interface Effect {
   params?: Record<string, any>;
 }
 
-// You can read more about Record vs Map here:
-// https://www.typescriptlang.org/docs/handbook/utility-types.html#recordkeys-type
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map
-// https://stackoverflow.com/questions/56398223/differences-between-and-when-to-use-map-vs-record
-
 // Define shaders for post-processing
 // And uniforms to be visible to the GUI
 const bloomUniforms = {
-  uBrightnessThreshold: 0.5, 
+  uBrightnessThreshold: 0.2,
 };
 const bloomShader: ShaderDefinition = {
   uniforms: {
@@ -49,33 +45,48 @@ const bloomShader: ShaderDefinition = {
 };
 
 const blurUniforms = {
-  uBlurAmount: 5.0,
-  uIntensity: 0.5,
+  uBlurAmount: 1.8,
+  uIntensity: 1.5,
   uDirection: new THREE.Vector2(1.0, 0.0),
 };
 const blurShader: ShaderDefinition = {
   uniforms: {
     tDiffuse: { value: null },
-    uDirection: {value: new THREE.Vector2(1.0, 0.0)},
-    uBlurAmount: {value: blurUniforms.uBlurAmount},
-    uIntensity: {value: blurUniforms.uIntensity},
+    uDirection: { value: new THREE.Vector2(1.0, 0.0) },
+    uBlurAmount: { value: blurUniforms.uBlurAmount },
+    uIntensity: { value: blurUniforms.uIntensity },
   },
   vertexShader: ppVertexShader,
   fragmentShader: ppFragmentBlur,
 };
 
+const combineUniforms = {
+  uIntensity: 1.0,
+};
+// const combineShader: ShaderDefinition = {
+//   uniforms: {
+//     tScene: { value: null },
+//     tBloom: { value: null },
+//     uIntensity: { value: combineUniforms.uIntensity },
+//   },
+//   vertexShader: ppVertexShader,
+//   fragmentShader: ppCombine,
+// };
+
 class App {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
-  //private geometry: any;
-  //private material: THREE.ShaderMaterial;
-  //private mesh: THREE.Mesh;
-  private startTime: number;
 
   // Post-processing
   private composer: EffectComposer;
   private effects: Map<string, Effect>;
+  private sceneRenderTarget: THREE.WebGLRenderTarget;
+  // private bloomRenderTarget: THREE.WebGLRenderTarget;
+
+  // Animation
+  private mixer: THREE.AnimationMixer;
+  private clock: THREE.Clock = new THREE.Clock(true);
 
   private camConfig = {
     fov: 75,
@@ -93,79 +104,73 @@ class App {
       this.camConfig.fov,
       this.camConfig.aspect,
       this.camConfig.near,
-      this.camConfig.far
+      this.camConfig.far,
     );
 
     // Setup renderer
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
-      powerPreference: 'high-performance',
+      powerPreference: "high-performance",
     });
     if (!this.renderer.capabilities.isWebGL2) {
-      console.warn('WebGL 2.0 is not available on this browser.');
+      console.warn("WebGL 2.0 is not available on this browser.");
     }
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     const canvas = document.body.appendChild(this.renderer.domElement);
 
-  //Keep in case we want to load texture
-  /*
-    const resolution = new THREE.Vector2(window.innerWidth, window.innerHeight);
-
-    this.geometry = new THREE.BoxGeometry(1, 1, 1, 32, 32, 32);
-
-    const count = this.geometry.attributes.position.count;
-    let randoms = new Float32Array(count);
-    randoms = randoms.map(() => Math.random());
-    const randomAttributes = new THREE.BufferAttribute(randoms, 1);
-    this.geometry.setAttribute('a_random', randomAttributes);
-
-    const textureLoader = new THREE.TextureLoader();
-    const boxTexture = textureLoader.load('static/img/box.jpeg');
-    this.material = new THREE.RawShaderMaterial({
-      vertexShader,
-      fragmentShader,
-      transparent: true,
-      uniforms: {
-        projectionMatrix: { value: this.camera.projectionMatrix },
-        viewMatrix: { value: this.camera.matrixWorldInverse },
-        modelMatrix: { value: new THREE.Matrix4() },
-        // custom uniforms
-        uTime: { value: 0.0 },
-        uResolution: { value: resolution },
-        uTexture: { value: boxTexture },
+    this.composer = new EffectComposer(this.renderer);
+    this.effects = new Map<string, Effect>();
+    this.sceneRenderTarget = new THREE.WebGLRenderTarget(
+      window.innerWidth,
+      window.innerHeight,
+      {
+        format: THREE.RGBAFormat,
+        type: THREE.UnsignedByteType,
       },
-      glslVersion: THREE.GLSL3,
-    });
-*/
+    );
+    // this.bloomRenderTarget = new THREE.WebGLRenderTarget(
+    //   window.innerWidth,
+    //   window.innerHeight,
+    //   {
+    //     format: THREE.RGBAFormat,
+    //     type: THREE.UnsignedByteType,
+    //   },
+    // );
+
+    this.mixer = new THREE.AnimationMixer(this.scene); // Initialize the mixer
+
     // Add lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Soft white light
+    const ambientLight = new THREE.AmbientLight(0xffffff, 10.0); // Soft white light
     this.scene.add(ambientLight);
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 3); // Bright white light
     directionalLight.position.set(1, 1, 1).normalize(); // Position the light at an angle
-    this.scene.add(directionalLight);
-
-    // Create mesh
-    //this.mesh = new THREE.Mesh(this.geometry, this.material);
-    //this.scene.add(this.mesh);
     this.camera.position.z = 3.0;
 
-    // Add some spheres
-    const yellowSphere = this.createNewSphere(0.5, new THREE.Vector3(1.5, 0.5, 0), { color: 0xffff00 }); // Fluorescent yellow
-    this.scene.add(yellowSphere);
+    // Import neon model
+    const loader = new GLTFLoader();
+    loader.load(
+      "src/models/primary_ion_drive.glb",
+      (gltf) => {
+        const scale = 0.5;
+        const model = gltf.scene;
+        model.scale.set(scale, scale, scale);
+        model.position.set(0, 0, 0);
+        this.mixer = new THREE.AnimationMixer(model); // Initialize the mixer with the loaded model
+        const animation = gltf.animations[0];
+        const action = this.mixer.clipAction(animation);
+        action.play();
 
-    const greenSphere = this.createNewSphere(0.5, new THREE.Vector3(-1.5, -0.8, 0.5), { color: 0x00ff00 }); // Fluorescent green
-    this.scene.add(greenSphere);
+        this.scene.add(model);
+      },
+      (xhr) => {
+        console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
+      },
+      (err) => {
+        console.log(err);
+      },
+    );
 
-    const cyanSphere = this.createNewSphere(0.5, new THREE.Vector3(-0.3, 1.5, 0.3), { color: 0x00ffff }); // Fluorescent cyan
-    this.scene.add(cyanSphere);
-
-    const fuchsiaSphere = this.createNewSphere(0.5, new THREE.Vector3(0.8, -1.5, -0.5), { color: 0xff00ff }); // Fluorescent fuchsia
-    this.scene.add(fuchsiaSphere);
-
-    const graySphere = this.createNewSphere(0.5, new THREE.Vector3(0, 0, 0), { color: 0x808080 }); // Gray
-    this.scene.add(graySphere);
-        
     const controls = new OrbitControls(this.camera, canvas);
     controls.enableDamping = true;
 
@@ -193,30 +198,35 @@ class App {
         this.updateEffectParam("blurV", "uIntensity", value);
       });
     folder
-      .add({ blurH: true }, 'blurH')
-      .name('Enable Horizontal Blur')
-      .onChange((enabled: boolean) => {
-        this.toggleEffect('blurH', enabled);
+      .add(combineUniforms, "uIntensity", 0.0, 10.0)
+      .name("Intensity")
+      .onChange((value: number) => {
+        this.updateEffectParam("combine", "uIntensity", value);
       });
     folder
-      .add({ blurV: true }, 'blurV')
-      .name('Enable Vertical Blur')
+      .add({ blurH: true }, "blurH")
+      .name("Enable Horizontal Blur")
       .onChange((enabled: boolean) => {
-        this.toggleEffect('blurV', enabled);
+        this.toggleEffect("blurH", enabled);
+      });
+    folder
+      .add({ blurV: true }, "blurV")
+      .name("Enable Vertical Blur")
+      .onChange((enabled: boolean) => {
+        this.toggleEffect("blurV", enabled);
       });
 
     folder
-      .add({ bloom: true }, 'bloom')
-      .name('Enable Bloom')
+      .add({ bloom: true }, "bloom")
+      .name("Enable Bloom")
       .onChange((enabled: boolean) => {
-        this.toggleEffect('bloom', enabled);
+        this.toggleEffect("bloom", enabled);
       });
 
     // Initialize post-processing
     this.setupPostProcessing();
 
     // Initialize
-    this.startTime = Date.now();
     this.onWindowResize();
 
     // Bind methods
@@ -224,25 +234,15 @@ class App {
     this.animate = this.animate.bind(this);
 
     // Add event listeners
-    window.addEventListener('resize', this.onWindowResize);
+    window.addEventListener("resize", this.onWindowResize);
 
     // Start the main loop
     this.animate();
   }
 
-  private createNewSphere(radius: number, position: THREE.Vector3, color: THREE.MeshPhongMaterialParameters) {
-    const geometry = new THREE.SphereGeometry(radius, 32, 32);
-    const material = new THREE.MeshPhongMaterial(color);
-    const sphere = new THREE.Mesh(geometry, material);
-    
-    sphere.position.copy(position);
-    return sphere;
-  }
-
   // Set post-processing pipeline
   private setupPostProcessing(): void {
     // Initialize the effect composer
-    this.composer = new EffectComposer(this.renderer);
     this.renderer.setClearColor(0x000000, 1.0); // Transparent background
 
     // Add the render pass
@@ -253,14 +253,25 @@ class App {
     this.effects = new Map<string, Effect>();
 
     // Add bloom effect
-    this.addEffect('bloom', bloomShader);
-    
+    this.addEffect("bloom", bloomShader);
+
     // Add two-pass Gaussian blur
-    this.addEffect('blurH', blurShader, {uDirection: new THREE.Vector2(1.0, 0.0)}); //Horizontal
-    this.addEffect('blurV', blurShader, {uDirection: new THREE.Vector2(0.0,1.0)}); //Vertical
+    this.addEffect("blurH", blurShader, {
+      uDirection: new THREE.Vector2(1.0, 0.0),
+    }); //Horizontal
+    this.addEffect("blurV", blurShader, {
+      uDirection: new THREE.Vector2(0.0, 1.0),
+    }); //Vertical
+
+    // this.addEffect("combine", combineShader, {
+    //   tScene: this.sceneRenderTarget.texture,
+    //   tBloom: this.bloomRenderTarget.texture,
+    // }); // Combine the two passes
   }
 
-  private createGLSL3ShaderPass(shaderDefinition: ShaderDefinition): ShaderPass {
+  private createGLSL3ShaderPass(
+    shaderDefinition: ShaderDefinition,
+  ): ShaderPass {
     // Hello, old friend
     // Create a custom material that explicitly uses GLSL 3.0
     const material = new THREE.RawShaderMaterial({
@@ -275,7 +286,11 @@ class App {
     return pass;
   }
 
-  public addEffect(name: string, shaderDefinition: ShaderDefinition, params?: Record<string, any>): void {
+  public addEffect(
+    name: string,
+    shaderDefinition: ShaderDefinition,
+    params?: Record<string, any>,
+  ): void {
     // GLSL 1.0 regular stuff
     // const pass = new ShaderPass(shaderDefinition);
     // GLSL 3.0 custom material
@@ -321,13 +336,16 @@ class App {
 
   private animate(): void {
     requestAnimationFrame(this.animate);
-    const elapsedTime = (Date.now() - this.startTime) / 1000;
-    //this.material.uniforms.uTime.value = elapsedTime;
+    const delta = this.clock.getDelta();
+    if (this.mixer) this.mixer.update(delta);
 
-    // Forget about the renderer, we will use the composer instead
-    // this.renderer.render(this.scene, this.camera);
-    // Use the composer instead of directly rendering
+    this.renderer.setRenderTarget(this.sceneRenderTarget);
+    this.renderer.render(this.scene, this.camera);
+
+    // this.renderer.setRenderTarget(this.bloomRenderTarget);
     this.composer.render();
+
+    this.renderer.setRenderTarget(null);
   }
 
   private onWindowResize(): void {
@@ -342,8 +360,4 @@ class App {
   }
 }
 
-const myApp = new App();
-
-// Example of how to control the effect after initialization:
-// myApp.updateEffectParam('grayscale', 'intensity', 0.5); // 50% grayscale
-// myApp.toggleEffect('grayscale', false); // Turn off grayscale
+new App();

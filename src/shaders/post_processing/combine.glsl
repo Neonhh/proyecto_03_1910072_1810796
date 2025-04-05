@@ -1,5 +1,4 @@
-// currently not used
-// shader for render pass to combine outputs from multiple render targets
+// Shader for render pass to combine outputs from multiple render targets
 precision mediump float;
 
 uniform sampler2D tScene; // Original scene texture

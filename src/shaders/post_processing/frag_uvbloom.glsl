@@ -6,9 +6,7 @@ uniform float uIntensity;
 uniform float uBrightnessThreshold;
 
 in vec2 vUv;
-// multiple render targets (MRT)
-layout (location = 0) out vec4 fragColor;
-layout (location = 1) out vec4 brightColor;
+out vec4 fragColor;
 
 
 void main() {
@@ -21,9 +19,8 @@ void main() {
     bright = color;
   }
   else {
-    bright = vec4(0.0);
+    bright = vec4(vec3(0.0), 1.0); // Set to black if below threshold
   }
 
-  fragColor = bright; // Setting as 'bright' for debugging. Should be 'color'.
-  brightColor = bright;    // Output the bright areas for bloom
+  fragColor = vec4(color.xyz * clamp(brightness, 0.0, 1.0), 1.0);
 }
