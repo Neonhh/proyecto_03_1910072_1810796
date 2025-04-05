@@ -1,4 +1,4 @@
-# Particles Systems | Entrega 02 lab
+# Multiple Render Targets | Entrega 03 lab
 
 ## Integrantes
 - Néstor Herrera - Carnet 18-10796
@@ -21,5 +21,3 @@ El API utilizado es Three.js junto con GLSL para los shaders. Se utilizaron las 
 2. Tener instalado Node.js (v20.10+) y un navegador (si estás viendo esto probablemente tienes un navegador).
 3. Ejecutar `npm install` para instalar dependencias.
 4. Ejecutar `npm run dev` para ejecutar el proyecto usando Three.js, usualmente en el puerto 5173. El comando te dice a que direccion ir en tu navegador.
-
-## Cómo utilizar
