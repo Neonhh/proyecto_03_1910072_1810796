@@ -21,9 +21,9 @@ void main() {
     bright = color;
   }
   else {
-    bright = vec4(0.0);
+    bright = vec4(0.0,0.0,0.0,1.0);
   }
 
-  fragColor = bright; // Setting as 'bright' for debugging. Should be 'color'.
+  fragColor = color; // Setting as 'bright' for debugging. Should be 'color'.
   brightColor = bright;    // Output the bright areas for bloom
 }

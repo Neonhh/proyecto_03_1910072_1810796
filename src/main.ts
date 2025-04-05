@@ -12,6 +12,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import ppVertexShader from './shaders/post_processing/vertex.glsl';
 import ppFragmentUVBloom from './shaders/post_processing/frag_uvbloom.glsl';
 import ppFragmentBlur from './shaders/post_processing/blur.glsl';
+import ppCombine from './shaders/post_processing/combine.glsl'
 
 // Define shader definition interface
 interface ShaderDefinition {
@@ -64,6 +65,8 @@ const blurShader: ShaderDefinition = {
   fragmentShader: ppFragmentBlur,
 };
 
+
+
 class App {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
@@ -72,9 +75,11 @@ class App {
   //private material: THREE.ShaderMaterial;
   //private mesh: THREE.Mesh;
   private startTime: number;
-
+  
   // Post-processing
+  private mrt: THREE.WebGLRenderTarget;
   private composer: EffectComposer;
+  private combineComposer: EffectComposer;
   private effects: Map<string, Effect>;
 
   private camConfig = {
@@ -211,6 +216,11 @@ class App {
       .onChange((enabled: boolean) => {
         this.toggleEffect('bloom', enabled);
       });
+    
+    // Set up MRT
+    this.mrt = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {count: 2,});
+
+    //this.blurRT = new THREE.WebGLRenderTarget(width, height); // Para el blur
 
     // Initialize post-processing
     this.setupPostProcessing();
@@ -242,22 +252,45 @@ class App {
   // Set post-processing pipeline
   private setupPostProcessing(): void {
     // Initialize the effect composer
-    this.composer = new EffectComposer(this.renderer);
     this.renderer.setClearColor(0x000000, 1.0); // Transparent background
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.renderTarget1 = this.mrt; //render to the texture targets
 
     // Add the render pass
     const renderPass = new RenderPass(this.scene, this.camera);
+    renderPass.renderToScreen = false;
     this.composer.addPass(renderPass);
 
     // Initialize effects collection
     this.effects = new Map<string, Effect>();
 
+    const [textureColor, textureBrightness] = this.mrt.textures;
+    //const [textureColor, textureBrightness] = this.mrt.texture;
+    
     // Add bloom effect
-    this.addEffect('bloom', bloomShader);
+    this.addEffect('bloom', bloomShader, false);
     
     // Add two-pass Gaussian blur
-    this.addEffect('blurH', blurShader, {uDirection: new THREE.Vector2(1.0, 0.0)}); //Horizontal
-    this.addEffect('blurV', blurShader, {uDirection: new THREE.Vector2(0.0,1.0)}); //Vertical
+    this.addEffect('blurH', blurShader, false, {tDiffuse: textureBrightness, uDirection: new THREE.Vector2(1.0, 0.0)}); //Horizontal
+    this.addEffect('blurV', blurShader, false, {tDiffuse: textureBrightness, uDirection: new THREE.Vector2(0.0,1.0)}); //Vertical
+
+    console.log(this.mrt.textures[0]);
+    console.log(this.mrt.textures[1]);
+    
+    // Combine scene outputs
+
+    this.combineComposer = new EffectComposer(this.renderer);
+    const combineShader: ShaderDefinition = {
+      uniforms: {
+        tDiffuse: {value: null},
+        tScene: {value: this.mrt.textures[0]}, // Combines outputs from the scene and blur applied to bright areas
+        tBloom: {value: this.mrt.textures[1]},
+      },
+      vertexShader: ppVertexShader,
+      fragmentShader: ppCombine,
+    };
+
+    //this.addCombiner('combine', combineShader, true);
   }
 
   private createGLSL3ShaderPass(shaderDefinition: ShaderDefinition): ShaderPass {
@@ -275,7 +308,7 @@ class App {
     return pass;
   }
 
-  public addEffect(name: string, shaderDefinition: ShaderDefinition, params?: Record<string, any>): void {
+  public addEffect(name: string, shaderDefinition: ShaderDefinition, toScreen: boolean = true, params?: Record<string, any>): void {
     // GLSL 1.0 regular stuff
     // const pass = new ShaderPass(shaderDefinition);
     // GLSL 3.0 custom material
@@ -287,10 +320,58 @@ class App {
           pass.uniforms[key].value = value;
         }
       });
+      pass.material.uniformsNeedUpdate = true;
     }
+
+    pass.renderToScreen = toScreen;
 
     // Add the pass to the composer
     this.composer.addPass(pass);
+
+    // Store the effect for later manipulation
+    this.effects.set(name, {
+      pass,
+      name,
+      enabled: true,
+      params,
+    });
+  }
+
+  public addCombiner(name: string, shaderDefinition: ShaderDefinition, toScreen: boolean = true, params?: Record<string, any>): void {
+    // GLSL 1.0 regular stuff
+    // const pass = new ShaderPass(shaderDefinition);
+    // GLSL 3.0 custom material
+
+    const originalTextures = {
+      tScene: shaderDefinition.uniforms.tScene?.value,
+      tBloom: shaderDefinition.uniforms.tBloom?.value
+    };
+
+    const material = new THREE.RawShaderMaterial({
+      uniforms: shaderDefinition.uniforms,  // uniformUtils does not allow to copy textures when cloning uniforms
+      vertexShader: shaderDefinition.vertexShader,
+      fragmentShader: shaderDefinition.fragmentShader,
+      glslVersion: THREE.GLSL3,
+    });
+
+    if (originalTextures.tScene) material.uniforms.tScene.value = originalTextures.tScene;
+    if (originalTextures.tBloom) material.uniforms.tBloom.value = originalTextures.tBloom;
+
+    // Create a ShaderPass with this material
+    const pass = new ShaderPass(material);
+
+    pass.material.uniformsNeedUpdate = true;
+
+
+    if (name === 'combine') {
+      console.log("tScene:", pass.material.uniforms.tScene.value?.uuid);
+      console.log("tBloom:", pass.material.uniforms.tBloom.value?.uuid);
+    }
+
+    pass.renderToScreen = toScreen;
+
+    // Add the pass to the composer
+    this.combineComposer.addPass(pass);
 
     // Store the effect for later manipulation
     this.effects.set(name, {
@@ -327,7 +408,11 @@ class App {
     // Forget about the renderer, we will use the composer instead
     // this.renderer.render(this.scene, this.camera);
     // Use the composer instead of directly rendering
+    this.renderer.setRenderTarget(this.mrt);
     this.composer.render();
+
+    this.renderer.setRenderTarget(null); //renders to main framebuffer (screen)
+    this.combineComposer.render();
   }
 
   private onWindowResize(): void {
